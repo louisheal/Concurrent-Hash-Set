@@ -1,0 +1,105 @@
+{
+	"configurations" : 
+	[
+		{
+			"directories" : 
+			[
+				{
+					"build" : ".",
+					"jsonFile" : "directory-.-Debug-f5ebdc15457944623624.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.13"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "hashsets",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "checks::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-checks-Debug-e48c9694bfe804d56401.json",
+					"name" : "checks",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "demo_coarse_grained::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-demo_coarse_grained-Debug-65644f76fefeee0d2c07.json",
+					"name" : "demo_coarse_grained",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "demo_refinable::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-demo_refinable-Debug-d704b7a53e82fd484e06.json",
+					"name" : "demo_refinable",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "demo_sequential::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-demo_sequential-Debug-b39770088b8d6db60f3b.json",
+					"name" : "demo_sequential",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "demo_striped::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-demo_striped-Debug-58c0c82de3dad4feb47c.json",
+					"name" : "demo_striped",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "playground::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-playground-Debug-3b6c7f102ca0b0008eab.json",
+					"name" : "playground",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/Users/anjey/Documents/Year_3_icl/07_concurrency/coursework/cw_1/DataFiles/cmake-build-debug",
+		"source" : "/Users/anjey/Documents/Year_3_icl/07_concurrency/coursework/cw_1/DataFiles"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 4
+	}
+}
