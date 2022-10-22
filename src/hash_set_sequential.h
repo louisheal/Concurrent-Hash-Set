@@ -11,37 +11,37 @@
 template<typename T>
 class HashSetSequential : public HashSetBase<T> {
 public:
-    explicit HashSetSequential(size_t initial_capacity) : capacity_(initial_capacity) {
-      table_.resize(capacity_);
-      size_ = 0;
-    }
+  explicit HashSetSequential(size_t initial_capacity) : capacity_(initial_capacity) {
+    table_.resize(capacity_);
+    size_ = 0;
+  }
 
-    bool Add(T elem) final {
-      size_t bucketNum = std::hash<T>()(elem) % capacity_;
-      auto result = table_[bucketNum].insert(elem);
+  bool Add(T elem) final {
+    size_t bucketNum = std::hash<T>()(elem) % capacity_;
+    auto result = table_[bucketNum].insert(elem);
 
-      size_ += result.second ? 1 : 0;
-      return result;
-    }
+    size_ += result.second ? 1 : 0;
+    return result;
+  }
 
-    bool Remove(T elem) final {
-      size_t bucketNum = std::hash<T>()(elem) % capacity_;
-      bool result = table_[bucketNum].erase(elem);
+  bool Remove(T elem) final {
+    size_t bucketNum = std::hash<T>()(elem) % capacity_;
+    bool result = table_[bucketNum].erase(elem);
 
-      size_ -= result ? 1 : 0;
-      return result;
-    }
+    size_ -= result ? 1 : 0;
+    return result;
+  }
 
-    [[nodiscard]] bool Contains(T elem) final {
-      size_t bucketNum = std::hash<T>()(elem) % capacity_;
-      return table_[bucketNum].count(elem) == 1;
-    }
+  [[nodiscard]] bool Contains(T elem) final {
+    size_t bucketNum = std::hash<T>()(elem) % capacity_;
+    return table_[bucketNum].count(elem) == 1;
+  }
 
-    [[nodiscard]] size_t Size() const final {
-      return size_;
-    }
+  [[nodiscard]] size_t Size() const final {
+    return size_;
+  }
 
-private:
+  private:
     size_t capacity_;
     size_t size_;
     std::vector<std::set<T>> table_;
