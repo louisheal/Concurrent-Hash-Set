@@ -18,9 +18,9 @@ public:
 
   bool Add(T elem) final {
     size_t bucketNum = std::hash<T>()(elem) % capacity_;
-    auto result = table_[bucketNum].insert(elem);
+    auto result = table_[bucketNum].insert(elem).second;
 
-    size_ += result.second ? 1 : 0;
+    size_ += result ? 1 : 0;
     return result;
   }
 
