@@ -6,58 +6,72 @@
 #include <mutex>
 #include <set>
 #include <vector>
-
+#include <memory>
 #include "src/hash_set_base.h"
 
 template<typename T>
 class HashSetCoarseGrained : public HashSetBase<T> {
   public:
-  explicit HashSetCoarseGrained(size_t initial_capacity) : capacity_(initial_capacity),
-                                                           table_(capacity_, std::set<T>()) {
-    table_.resize(capacity_);
-    size_ = 0;
+  explicit HashSetCoarseGrained(size_t initial_capacity) : size_(0u),
+                                                           table_(std::make_unique<std::vector<std::set<T>>> (initial_capacity)) {
   }
 
   bool Add(T elem) final {
-    size_t bucketNum = std::hash<T>()(elem) % capacity_;
-
-    mutex_.lock();
-    auto result = table_[bucketNum].insert(elem).second;
-    size_ += result ? 1 : 0;
-    mutex_.unlock();
-
-    return result;
+      std::scoped_lock<std::mutex> lock(mutex_);
+      size_t bucket_num = std::hash<T>()(elem) % (*table_).size();
+      bool result = (*table_)[bucket_num].insert(elem).second;
+      size_ += result ? 1 : 0;
+      if (policy()) {
+          resize();
+      }
+      return result;
   }
 
   bool Remove(T elem) final {
-    size_t bucketNum = std::hash<T>()(elem) % capacity_;
-
-    mutex_.lock();
-    bool result = table_[bucketNum].erase(elem);
-    size_ -= result ? 1 : 0;
-    mutex_.unlock();
-
-    return result;
+      std::scoped_lock<std::mutex> lock(mutex_);
+      size_t bucketNum = std::hash<T>()(elem) % (*table_).size();
+      bool result = (*table_)[bucketNum].erase(elem) == 1;
+      size_ -= result ? 1 : 0;
+      return result;
   }
 
   [[nodiscard]] bool Contains(T elem) final {
-    size_t bucketNum = std::hash<T>()(elem) % capacity_;
-
-    mutex_.lock();
-    size_t result = table_[bucketNum].count(elem);
-    mutex_.unlock();
-
-    return result == 1;
+      std::scoped_lock<std::mutex> lock(mutex_);
+      size_t bucketNum = std::hash<T>()(elem) % (*table_).size();
+      return (*table_)[bucketNum].find(elem) != (*table_)[bucketNum].end();
   }
 
   [[nodiscard]] size_t Size() const final {
+      std::scoped_lock<std::mutex> lock(mutex_);
     return size_;
   }
 
+private:
+    // Checking whether we need to resize the hashset to guarantee const time operations
+    bool policy() {
+        return size_ / (*table_).size() > 4;
+    }
+
+    void resize() {
+        size_t old_capacity = (*table_).size();
+        size_t new_capacity = 2 * old_capacity;
+        auto new_table(std::make_unique<std::vector<std::set<T>>> (new_capacity));
+        for (std::set<T> &bucket: (*table_)) {
+            for (auto& elem: bucket) {
+                size_t bucket_num = std::hash<T>()(elem) % new_capacity;
+                (*new_table)[bucket_num].insert(elem);
+            }
+        }
+        table_.release();
+        table_ = std::move(new_table);
+    }
+
   private:
-  size_t capacity_;
-  size_t size_;
-  std::vector<std::set<T>> table_;
+    // Number of elements in the hashset
+    size_t size_;
+    // Vector of buckets for elements. Made as unique_ptr because we need to resize
+    // the table, thus creating new object and point to it.
+    std::unique_ptr<std::vector<std::set<T>>> table_;
   std::mutex mutex_;
 };
 
