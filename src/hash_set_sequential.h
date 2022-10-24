@@ -52,14 +52,13 @@ class HashSetSequential : public HashSetBase<T> {
   void resize() {
     size_t old_capacity = (*table_).size();
     size_t new_capacity = 2 * old_capacity;
-    auto new_table(std::make_unique<std::vector<std::set<T>>> (new_capacity));
+    auto new_table = std::make_unique<std::vector<std::set<T>>> (new_capacity);
     for (std::set<T> &bucket: (*table_)) {
       for (auto& elem: bucket) {
         size_t bucket_num = std::hash<T>()(elem) % new_capacity;
         (*new_table)[bucket_num].insert(elem);
       }
     }
-    table_.release();
     table_ = std::move(new_table);
   }
 
