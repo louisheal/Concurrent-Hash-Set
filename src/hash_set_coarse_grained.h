@@ -9,10 +9,11 @@
 
 #include "src/hash_set_base.h"
 
-template <typename T>
+template<typename T>
 class HashSetCoarseGrained : public HashSetBase<T> {
- public:
-  explicit HashSetCoarseGrained(size_t initial_capacity) : capacity_(initial_capacity) {
+  public:
+  explicit HashSetCoarseGrained(size_t initial_capacity) : capacity_(initial_capacity),
+                                                           table_(capacity_, std::set<T>()) {
     table_.resize(capacity_);
     size_ = 0;
   }
@@ -54,10 +55,10 @@ class HashSetCoarseGrained : public HashSetBase<T> {
   }
 
   private:
-    size_t capacity_;
-    size_t size_;
-    std::vector<std::set<T>> table_;
-    std::mutex mutex_;
+  size_t capacity_;
+  size_t size_;
+  std::vector<std::set<T>> table_;
+  std::mutex mutex_;
 };
 
 #endif  // HASH_SET_COARSE_GRAINED_H
