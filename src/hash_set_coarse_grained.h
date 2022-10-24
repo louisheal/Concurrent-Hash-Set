@@ -72,7 +72,8 @@ private:
     // Vector of buckets for elements. Made as unique_ptr because we need to resize
     // the table, thus creating new object and point to it.
     std::unique_ptr<std::vector<std::set<T>>> table_;
-  std::mutex mutex_;
+    // Lock is mutable, so it can be locked within Size(), which is const function
+    mutable std::mutex mutex_;
 };
 
 #endif  // HASH_SET_COARSE_GRAINED_H
