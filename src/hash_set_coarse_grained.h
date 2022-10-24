@@ -62,6 +62,7 @@ private:
                 (*new_table)[bucket_num].insert(elem);
             }
         }
+        table_.release();
         table_ = std::move(new_table);
     }
 
