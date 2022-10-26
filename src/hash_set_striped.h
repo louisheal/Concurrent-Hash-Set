@@ -49,7 +49,7 @@ public:
   }
 
   [[nodiscard]] size_t Size() const final {
-    return static_cast<size_t>(size_.load());
+    return size_.load();
   }
 
 private:
@@ -64,7 +64,7 @@ private:
   }
 
   bool policy() {
-    return static_cast<size_t>(size_.load()) / table_.size() > 4;
+    return size_.load() / table_.size() > 4;
   }
 
   void resize() {
