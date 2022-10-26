@@ -3,137 +3,127 @@
 
 #include <atomic>
 #include <cassert>
-#include <condition_variable>
-#include <iostream>
-#include <memory>
 #include <mutex>
 #include <set>
 #include <vector>
+#include <shared_mutex>
 
 #include "src/hash_set_base.h"
 
-template <typename T> class HashSetRefinable : public HashSetBase<T> {
+template<typename T>
+class HashSetRefinable : public HashSetBase<T> {
 public:
-  explicit HashSetRefinable(size_t initial_capacity)
-      : resizing_(false), num_locked_locks_(0), size_(0),
-        table_(initial_capacity) {
-    for (size_t i = 0; i < initial_capacity; i++) {
-      std::unique_ptr<std::mutex> lock = std::make_unique<std::mutex>();
-      locks_.push_back(std::move(lock));
-    }
-  }
+    explicit HashSetRefinable(size_t initial_capacity) : size_(0), table_(initial_capacity), locks_(std::make_unique<std::vector<std::mutex>>(initial_capacity)),
+                                                         bucket_count_(initial_capacity) {}
 
-  bool Add(T elem) final {
-    auto lock = acquire(elem);
-    size_t bucket_num = std::hash<T>()(elem) % table_.size();
-    bool result = table_[bucket_num].insert(elem).second;
-    if (result) {
-      size_.fetch_add(1);
+    bool Add(T elem) final {
+      read_write_lock_.lock_shared();
+      size_t lock_num = std::hash<T>()(elem) % bucket_count_.load();
+      (*locks_)[lock_num].lock();
+      read_write_lock_.unlock();
+      bool result = table_[lock_num].insert(elem).second;
+      (*locks_)[lock_num].unlock();
+      if (result) {
+        size_.fetch_add(1);
+      }
+      if (policy()) {
+        resize();
+      }
+      return result;
     }
-    release(std::move(lock));
-    if (policy()) {
-      resize();
+
+    bool Remove(T elem) final {
+      read_write_lock_.lock_shared();
+      size_t lock_num = std::hash<T>()(elem) % bucket_count_.load();
+      (*locks_)[lock_num].lock();
+      read_write_lock_.unlock();
+      bool result = table_[lock_num].erase(elem);
+      (*locks_)[lock_num].unlock();
+      if (result) {
+        size_.fetch_sub(1);
+      }
+      return result;
     }
-    return result;
-  }
 
-  bool Remove(T elem) final {
-    auto lock = acquire(elem);
-    size_t bucket_num = std::hash<T>()(elem) % table_.size();
-    bool result = table_[bucket_num].erase(elem);
-    if (result) {
-      size_.fetch_sub(1);
+    [[nodiscard]] bool Contains(T elem) final {
+      read_write_lock_.lock_shared();
+      size_t lock_num = std::hash<T>()(elem) % bucket_count_.load();
+      (*locks_)[lock_num].lock();
+      read_write_lock_.unlock();
+      bool result = table_[lock_num].find(elem) != table_[lock_num].end();
+      (*locks_)[lock_num].unlock();
+      return result;
     }
-    release(std::move(lock));
-    return result;
-  }
 
-  [[nodiscard]] bool Contains(T elem) final {
-    auto lock = acquire(elem);
-    size_t bucket_num = std::hash<T>()(elem) % table_.size();
-    bool result = table_[bucket_num].find(elem) != table_[bucket_num].end();
-    release(std::move(lock));
-    return result;
-  }
-
-  [[nodiscard]] size_t Size() const final { return size_.load(); }
+    [[nodiscard]] size_t Size() const final {
+      return size_.load();
+    }
 
 private:
-  std::unique_ptr<std::unique_lock<std::mutex>> acquire(T elem) {
-    while (true) {
-      size_t prev_size = locks_.size();
-      size_t lock_num = std::hash<T>()(elem) % locks_.size();
-      std::unique_ptr<std::unique_lock<std::mutex>> lock =
-          std::make_unique<std::unique_lock<std::mutex>>(*locks_[lock_num]);
 
-      is_resizing_.wait(*lock, [this]() -> bool { return !resizing_.load(); });
+//    void Acquire(T elem) {
+//      size_t num_locks = (*locks_).size();
+//      size_t lock_num =
+//    }
 
-      size_t curr_size = locks_.size();
-      if (prev_size == curr_size) {
-        num_locked_locks_.fetch_add(1);
-        return std::move(lock);
+    bool policy() {
+      return size_.load() / table_.size() > 4;
+    }
+
+    void resize() {
+
+      size_t old_capacity = table_.size();
+
+      read_write_lock_.lock();
+      for (auto &lock: (*locks_)) {
+        lock.lock();
       }
-      lock->unlock();
+
+      if (old_capacity != table_.size()) {
+        read_write_lock_.unlock();
+        for (auto &lock: (*locks_)) {
+          lock.unlock();
+        }
+        return;
+      }
+
+      size_t new_capacity = 2 * old_capacity;
+      bucket_count_.store(new_capacity);
+      auto new_locks(std::make_unique<std::vector<std::mutex>> (new_capacity));
+
+      std::vector<std::set<int>> old_table;
+      old_table.assign(table_.begin(), table_.end());
+
+      table_.clear();
+      table_.resize(new_capacity);
+
+      for (std::set<int> &bucket: old_table) {
+        for (int elem: bucket) {
+          size_t bucket_num = std::hash<int>()(elem) % new_capacity;
+          table_[bucket_num].insert(elem);
+        }
+      }
+
+      locks_.release();
+      locks_ = std::move(new_locks);
+
+      read_write_lock_.unlock();
+      for (auto &lock: (*locks_)) {
+        lock.unlock();
+      }
     }
-  }
 
-  void release(std::unique_ptr<std::unique_lock<std::mutex>> lock) {
-    num_locked_locks_.fetch_sub(1);
-    lock->unlock();
-    lock.release();
-  }
+private:
+    //  Number of elements in the hashset
+    std::atomic<size_t> size_;
+    //  Vector of buckets for elements
+    std::vector<std::set<T>> table_;
+    //  Vector of mutexes for each stripe
+    std::unique_ptr<std::vector<std::mutex>> locks_;
+    //  Number of buckets
+    std::atomic<size_t> bucket_count_;
+    //  Read / Write lock
+    std::shared_mutex read_write_lock_;
+};
 
-  bool policy() { return size_.load() / table_.size() > 4; }
-
-  void wait_all_finish() {
-    while (num_locked_locks_.load() != 0) {
-    }
-  }
-
-  void resize() {
-    /*
-        size_t old_capacity = table_.size();
-        // if returns false, then some other thread has already resized the set
-        bool expected = false;
-        if (resizing_.compare_exchange_strong(expected, true)) {
-          if (old_capacity != table_.size()) {
-            // Someone has already resized
-            resizing_.store(false);
-            return;
-          }
-          wait_all_finish();
-
-          size_t new_capacity = 2 * old_capacity;
-          //      locks_.resize(new_capacity);
-
-          std::vector<std::set<T>> old_table;
-          old_table.assign(table_.begin(), table_.end());
-          table_.clear();
-          table_.resize(new_capacity);
-
-          for (std::set<T> &bucket : old_table) {
-            for (auto &elem : bucket) {
-              size_t bucket_num = std::hash<T>()(elem) % new_capacity;
-              table_[bucket_num].insert(elem);
-            }
-          }
-          resizing_.store(false);
-          is_resizing_.notify_all();*/
-  }
-}
-
-private : std::atomic<bool>
-              resizing_;
-std::atomic<int> num_locked_locks_;
-//  Number of elements in the hashset
-std::atomic<size_t> size_;
-//  Vector of buckets for elements
-std::vector<std::set<T>> table_;
-
-//  Vector of mutexes for each stripe
-std::vector<std::unique_ptr<std::mutex>> locks_;
-std::condition_variable is_resizing_;
-}
-;
-
-#endif // HASH_SET_REFINABLE_H
+#endif  // HASH_SET_REFINABLE_H
