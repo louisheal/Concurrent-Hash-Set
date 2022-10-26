@@ -17,14 +17,19 @@ public:
 
   bool Add(T elem) final {
     Acquire(elem);
-    size_t bucketNum = std::hash<T>()(elem) % table_.size();
-    bool result = table_[bucketNum].insert(elem).second;
-    Release(elem);
+    size_t bucket_num = std::hash<T>()(elem) % table_.size();
+    bool result = table_[bucket_num].insert(elem).second;
     if (result) {
       size_.fetch_add(1u);
     }
-    if (policy()) {
-      resize();
+    // Have to get values of Policy() and table_.size() before we release the
+    // lock, so that we know if another thread resizes the table when the
+    // current thread attempts to
+    bool policy = Policy();
+    size_t old_capacity = table_.size();
+    Release(elem);
+    if (policy) {
+      Resize(old_capacity);
     }
     return result;
   }
@@ -33,24 +38,22 @@ public:
     Acquire(elem);
     size_t hash = std::hash<T>()(elem);
     bool result = table_[hash % table_.size()].erase(elem);
-    Release(elem);
     if (result) {
       size_.fetch_sub(1u);
     }
+    Release(elem);
     return result;
   }
 
   [[nodiscard]] bool Contains(T elem) final {
     Acquire(elem);
-    size_t bucketNum = std::hash<T>()(elem) % table_.size();
-    bool result = table_[bucketNum].find(elem) != table_[bucketNum].end();
+    size_t bucket_num = std::hash<T>()(elem) % table_.size();
+    bool result = table_[bucket_num].find(elem) != table_[bucket_num].end();
     Release(elem);
     return result;
   }
 
-  [[nodiscard]] size_t Size() const final {
-    return size_.load();
-  }
+  [[nodiscard]] size_t Size() const final { return size_.load(); }
 
 private:
   void Acquire(T elem) {
@@ -63,13 +66,9 @@ private:
     locks_[hash_code % locks_.size()].unlock();
   }
 
-  bool policy() {
-    return size_.load() / table_.size() > 4;
-  }
+  bool Policy() { return size_.load() / table_.size() > 4; }
 
-  void resize() {
-
-    size_t old_capacity = table_.size();
+  void Resize(size_t old_capacity) {
 
     for (auto &lock : locks_) {
       lock.lock();

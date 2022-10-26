@@ -20,24 +20,24 @@ public:
     size_t bucket_num = std::hash<T>()(elem) % (*table_).size();
     bool result = (*table_)[bucket_num].insert(elem).second;
     size_ += result ? 1 : 0;
-    if (policy()) {
-      resize();
+    if (Policy()) {
+      Resize();
     }
     return result;
   }
 
   bool Remove(T elem) final {
     std::scoped_lock<std::mutex> lock(mutex_);
-    size_t bucketNum = std::hash<T>()(elem) % (*table_).size();
-    bool result = (*table_)[bucketNum].erase(elem) == 1;
+    size_t bucket_num = std::hash<T>()(elem) % (*table_).size();
+    bool result = (*table_)[bucket_num].erase(elem) == 1;
     size_ -= result ? 1 : 0;
     return result;
   }
 
   [[nodiscard]] bool Contains(T elem) final {
     std::scoped_lock<std::mutex> lock(mutex_);
-    size_t bucketNum = std::hash<T>()(elem) % (*table_).size();
-    return (*table_)[bucketNum].find(elem) != (*table_)[bucketNum].end();
+    size_t bucket_num = std::hash<T>()(elem) % (*table_).size();
+    return (*table_)[bucket_num].find(elem) != (*table_)[bucket_num].end();
   }
 
   [[nodiscard]] size_t Size() const final {
@@ -46,21 +46,24 @@ public:
   }
 
 private:
-  // Checking whether we need to resize the hashset to guarantee const time
-  // operations
-  bool policy() { return size_ / (*table_).size() > 4; }
+  // Checking whether we need to resize the hashset to guarantee
+  // constant time operations
+  bool Policy() { return size_ / (*table_).size() > 4; }
 
-  void resize() {
+  void Resize() {
     size_t old_capacity = (*table_).size();
     size_t new_capacity = 2 * old_capacity;
+    // Created as a pointer, so we can move it to table_
     auto new_table(std::make_unique<std::vector<std::set<T>>>(new_capacity));
+    // Transfer of old elements to the resized table
     for (std::set<T> &bucket : (*table_)) {
       for (auto &elem : bucket) {
         size_t bucket_num = std::hash<T>()(elem) % new_capacity;
         (*new_table)[bucket_num].insert(elem);
       }
     }
-    table_.release();
+    // Deleting unused table
+    table_->clear();
     table_ = std::move(new_table);
   }
 
